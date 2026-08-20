@@ -1,0 +1,15 @@
+# dsh-gateway bundle patch
+#
+# Installing the plugin through the official CLI —
+#
+#   dsh plugin --profile <name> add link:/path/to/dsh-gateway
+#
+# — reconciles `dsh.profile.bundles` against installed packages and, seeing
+# this declaration, appends `dsh-gateway` to the bundle stack. On boot the
+# plugin injects the `webServer` service, and once the web GUI is listening
+# it starts the authenticated gateway (default 0.0.0.0:8642) proxying the
+# loopback server: Host rewritten, Origin stripped, WebSocket upgrades
+# tunneled, password gate in front.
+- insert:
+    - id: web-gateway
+      name: 'dsh-gateway'

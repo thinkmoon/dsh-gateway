@@ -1,0 +1,50 @@
+{
+  "name": "dsh-gateway",
+  "version": "0.1.0",
+  "description": "Authenticated reverse proxy for the DSH web GUI, as a plugin (starts with `dsh web`, default 0.0.0.0:8642) and a standalone CLI. Forwards every request (HTTP streams and WebSocket upgrades) to the loopback DSH server with Host rewritten to 127.0.0.1 and Origin stripped, so a remote session behaves exactly like a local one.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.mjs",
+  "bin": {
+    "dsh-gateway": "bin/dsh-gateway.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "files": [
+    "bin",
+    "src",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node test/smoke.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek",
+    "reverse-proxy",
+    "gateway"
+  ],
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@types/node": "^22.20.0",
+    "typescript": "~5.7.2"
+  },
+  "license": "MIT"
+}
