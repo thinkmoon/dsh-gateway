@@ -11,5 +11,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["bin", "src"]
+  "include": ["src"]
 }

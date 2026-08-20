@@ -1,15 +1,12 @@
 {
   "name": "dsh-gateway",
   "version": "0.1.0",
-  "description": "Authenticated reverse proxy for the DSH web GUI, as a plugin (starts with `dsh web`, default 0.0.0.0:8642) and a standalone CLI. Forwards every request (HTTP streams and WebSocket upgrades) to the loopback DSH server with Host rewritten to 127.0.0.1 and Origin stripped, so a remote session behaves exactly like a local one.",
+  "description": "DSH plugin: authenticated reverse proxy for the web GUI. Starts with `dsh web` (default 0.0.0.0:8642) and forwards every request (HTTP streams and WebSocket upgrades) to the loopback DSH server with Host rewritten to 127.0.0.1 and Origin stripped, so a remote session behaves exactly like a local one.",
   "type": "module",
   "engines": {
     "node": ">=20"
   },
   "main": "src/index.mjs",
-  "bin": {
-    "dsh-gateway": "bin/dsh-gateway.mjs"
-  },
   "exports": {
     ".": "./src/index.mjs",
     "./src/*": "./src/*",
@@ -21,7 +18,6 @@
     }
   },
   "files": [
-    "bin",
     "src",
     "cordis.patch.yml",
     "README.md",

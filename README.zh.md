@@ -23,7 +23,7 @@ DSH 的 web 服务**有意只允许绑定 127.0.0.1**（`dsh web --host 0.0.0.0`
 
 ## 安装与使用
 
-**插件模式（推荐）** —— gateway 随 `dsh web` 一起启动/退出，无需单独守护进程：
+gateway 作为 DSH 插件随 `dsh web` 一起启动/退出，无需单独守护进程：
 
 ```sh
 dsh plugin --profile web add link:/path/to/dsh-gateway
@@ -39,41 +39,27 @@ dsh web                      # gateway 自动监听 0.0.0.0:8642
     host: 0.0.0.0
     password: ""        # 留空则走解析顺序
     sessionTtlMs: 604800000
+    enabled: true
 ```
 
-**CLI 模式**（独立进程，适合 gateway 与 DSH 分机部署或临时使用）：
+开发：
 
 ```sh
 pnpm install
 pnpm typecheck
 pnpm test        # 14 项冒烟测试（含 WS 隧道、Host/Origin 改写断言）
-
-dsh web --port 3080 &
-node bin/dsh-gateway.mjs --target 3080          # 监听 0.0.0.0:8642
 ```
 
-密码解析顺序：`--password` → `$DSH_GATEWAY_PASSWORD` → `--password-file` → `~/.dsh-gateway/secret`（首次运行自动生成随机密码并打印一次，文件权限 0600）。
-
-### 选项
-
-| 选项 | 说明 | 默认 |
-| --- | --- | --- |
-| `--target <url\|host:port\|port>` | 本地 DSH 地址，如 `3080` / `127.0.0.1:3080` | 必填（或 `DSH_GATEWAY_TARGET`） |
-| `--host <addr>` / `--port <n>` | 监听地址 / 端口 | `0.0.0.0` / `8642` |
-| `--password <secret>` | 访问密码 | 见上文解析顺序 |
-| `--password-file <path>` | 从文件读密码 | - |
-| `--session-ttl <dur>` | 会话时长，如 `12h`、`7d` | `7d` |
-| `--cert <p>` `--key <p>` | 直接以 HTTPS 提供服务 | 明文 HTTP |
-| `-q, --quiet` | 关闭访问日志 | - |
+密码解析顺序：插件配置 `password` → `$DSH_GATEWAY_PASSWORD` → `~/.dsh-gateway/secret`（首次运行自动生成随机密码并记入日志，文件权限 0600）。
 
 ### 部署形态
 
 - **Cloudflare Tunnel（推荐，已有 named tunnel 的场景）**：`cloudflared` 的 service URL 指向 `http://127.0.0.1:8642` 即可，TLS 由边缘完成；`dsh.thinkmoon.cn` 这类域名可直接复用。
-- **LAN / VPS 直连**：务必加 TLS —— 要么 `--cert/--key`，要么前面放一层 Caddy/nginx。明文 HTTP 下密码和 cookie 会裸奔。
+- **LAN / VPS 直连**：务必加 TLS —— 在 gateway 前面放一层 Caddy/nginx。明文 HTTP 下密码和 cookie 会裸奔。
 
 ## 与 dsh-remote-web-ui 插件的关系
 
-`@linxin666/dsh-remote-web-ui` 是应用层方案（DSH 插件体系内做 pairing/设备管理）；dsh-gateway 是**网络层**方案，不依赖 DSH 插件机制、对 DSH 版本零侵入 —— 任何监听 loopback 的 HTTP+WS 服务都能被它安全地"远程化"。两者可共存，也可按场景择一。
+`@linxin666/dsh-remote-web-ui` 是应用层方案（DSH 插件体系内做 pairing/设备管理）；dsh-gateway 是**网络层**方案（传输层反向代理，把整个 web GUI 原样"远程化"）。两者可共存，也可按场景择一。
 
 ## 安全注意
 

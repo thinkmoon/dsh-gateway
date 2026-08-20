@@ -23,7 +23,7 @@ Every forwarded request gets `Host` rewritten to the local target and `Origin` s
 
 ## Install & usage
 
-**Plugin mode (recommended)** — the gateway starts and stops with `dsh web`, no separate process to babysit:
+The gateway is a DSH plugin that starts and stops with `dsh web` — no separate process to babysit:
 
 ```sh
 dsh plugin --profile web add link:/path/to/dsh-gateway
@@ -39,41 +39,27 @@ The plugin injects the `webServer` service and starts the gateway against the re
     host: 0.0.0.0
     password: ""        # empty → resolution order
     sessionTtlMs: 604800000
+    enabled: true
 ```
 
-**CLI mode** (standalone process, for split deployments or ad-hoc use):
+Development:
 
 ```sh
 pnpm install
 pnpm typecheck
 pnpm test        # 14 smoke tests (WS tunnel, Host/Origin rewrite assertions)
-
-dsh web --port 3080 &
-node bin/dsh-gateway.mjs --target 3080          # listens on 0.0.0.0:8642
 ```
 
-Password resolution order: `--password` → `$DSH_GATEWAY_PASSWORD` → `--password-file` → `~/.dsh-gateway/secret` (auto-generated random password on first run, printed once, file mode 0600).
-
-### Options
-
-| Flag | Description | Default |
-| --- | --- | --- |
-| `--target <url\|host:port\|port>` | local DSH address, e.g. `3080` / `127.0.0.1:3080` | required (or `DSH_GATEWAY_TARGET`) |
-| `--host <addr>` / `--port <n>` | listen address / port | `0.0.0.0` / `8642` |
-| `--password <secret>` | access password | see order above |
-| `--password-file <path>` | read password from file | - |
-| `--session-ttl <dur>` | session lifetime, e.g. `12h`, `7d` | `7d` |
-| `--cert <p>` `--key <p>` | serve HTTPS directly | plain HTTP |
-| `-q, --quiet` | silence the access log | - |
+Password resolution order: plugin config `password` → `$DSH_GATEWAY_PASSWORD` → `~/.dsh-gateway/secret` (auto-generated random password on first run, logged once, file mode 0600).
 
 ### Deployment shapes
 
 - **Cloudflare Tunnel (recommended when you already run a named tunnel)**: point the `cloudflared` service URL at `http://127.0.0.1:8642`; TLS terminates at the edge.
-- **LAN / VPS direct**: always add TLS — either `--cert/--key` or a Caddy/nginx layer in front. Over plain HTTP the password and cookie travel in cleartext.
+- **LAN / VPS direct**: always add TLS — put a Caddy/nginx layer in front. Over plain HTTP the password and cookie travel in cleartext.
 
 ## Relation to the dsh-remote-web-ui plugin
 
-`@linxin666/dsh-remote-web-ui` is an application-layer solution (pairing/device management inside the DSH plugin system); dsh-gateway is a **network-layer** one — it does not touch DSH's plugin machinery and is version-agnostic. Any loopback HTTP+WS service can be "remotized" through it. The two can coexist; pick per scenario.
+`@linxin666/dsh-remote-web-ui` is an application-layer solution (pairing/device management inside the DSH plugin system); dsh-gateway is a **network-layer** one (a transport-level reverse proxy that remotizes the whole web GUI as-is). The two can coexist; pick per scenario.
 
 ## Security notes
 
