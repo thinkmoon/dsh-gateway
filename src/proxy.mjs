@@ -139,13 +139,41 @@ function errnoOf(err) {
 /** Directories whose filenames carry a content hash and are safe to cache forever. */
 const IMMUTABLE_PATH_PREFIXES = ["/assets/", "/dist/", "/static/", "/vendor/", "/favicon"];
 
+/** Query parameter names whose values look like content hashes (e.g. `?rev=7eb52632`). */
+const HASH_QUERY_PARAMS = new Set(["rev", "v", "hash", "h", "checksum"]);
+const HASH_QUERY_VALUE = /^[0-9a-f]{8,}$/i;
+
+/**
+ * Does the request URL carry a content-hash query parameter (e.g. `?rev=<hash>`)?
+ * The full URL — query included — is the cache key, so a changed hash yields a
+ * new URL and the old immutable entry can never shadow the new content.
+ *
+ * @param {IncomingMessage} req
+ * @returns {boolean}
+ */
+function hasHashQueryParam(req) {
+  const query = (req.url ?? "").split("?")[1];
+  if (query === undefined) return false;
+  for (const pair of query.split("&")) {
+    const eq = pair.indexOf("=");
+    const name = eq === -1 ? pair : pair.slice(0, eq);
+    const value = eq === -1 ? "" : pair.slice(eq + 1);
+    if (HASH_QUERY_PARAMS.has(name.toLowerCase()) && HASH_QUERY_VALUE.test(value)) return true;
+  }
+  return false;
+}
+
 /**
  * Decide the Cache-Control policy a proxied response should carry.
  *
  * The upstream DSH web server sends no cache headers at all, so browsers
  * re-fetch every JS/CSS asset on each visit. HTML and anything dynamic stays
- * no-store; hash-named static assets become immutable; other static files get
- * a short revalidation window. An existing upstream policy is never overridden.
+ * no-store; hash-addressed static assets (hash-named paths or `?rev=<hash>`
+ * query params) become immutable — the hash is part of the cache key, so an
+ * upstream update ships a new URL and takes effect immediately; other static
+ * files get a short revalidation window. Upstream policies are overridden only
+ * for hash-addressed assets (to defeat pointless `no-cache` on `?rev=` URLs);
+ * otherwise they pass through untouched.
  *
  * @param {IncomingMessage} req
  * @param {string} contentType
@@ -159,7 +187,7 @@ function cacheControlFor(req, contentType) {
     || ct === "application/json"
     || /\.(?:css|js|mjs|json|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|eot|map|wasm|webmanifest)$/i.test(req.url ?? "");
   if (!staticLike) return undefined;
-  if (IMMUTABLE_PATH_PREFIXES.some((prefix) => (req.url ?? "/").startsWith(prefix))) {
+  if (IMMUTABLE_PATH_PREFIXES.some((prefix) => (req.url ?? "/").startsWith(prefix)) || hasHashQueryParam(req)) {
     return "public, max-age=31536000, immutable";
   }
   return "public, max-age=300";
@@ -194,7 +222,9 @@ export function createHttpForwarder(target, { cookieName, onError }) {
           if (HOP_BY_HOP.has(name)) continue;
           outHeaders[name] = value;
         }
-        if (outHeaders["cache-control"] === undefined && outHeaders.etag === undefined) {
+        const hashAddressed = hasHashQueryParam(req)
+          || IMMUTABLE_PATH_PREFIXES.some((prefix) => (req.url ?? "/").startsWith(prefix));
+        if ((outHeaders["cache-control"] === undefined && outHeaders.etag === undefined) || hashAddressed) {
           const cacheControl = cacheControlFor(req, String(up.headers["content-type"] ?? ""));
           if (cacheControl !== undefined && (up.statusCode ?? 502) < 400) outHeaders["cache-control"] = cacheControl;
         }

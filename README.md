@@ -42,11 +42,11 @@ Every forwarded request gets `Host` rewritten to the local target and `Origin` s
 | Response | Policy |
 | --- | --- |
 | HTML | `no-store` — never cached; login state and UI freshness always correct |
-| Static assets under hash-named paths (`/assets/`, `/dist/`, `/static/`, `/vendor/`, `/favicon`) | `public, max-age=31536000, immutable` — cached for a year; the filename hash guarantees correctness |
+| Static assets addressed by content hash — hash-named paths (`/assets/`, `/dist/`, `/static/`, `/vendor/`, `/favicon`) or hash query params (`?rev=<hash>`, `?v=<hash>`, …) | `public, max-age=31536000, immutable` — cached for a year; the hash is part of the URL, so an upstream update ships a new URL and takes effect immediately (upstream `no-cache` on such URLs is overridden) |
 | Other static files (JS/CSS/images/fonts/wasm…, by content-type or extension) | `public, max-age=300` — short window, then revalidate |
 | Everything else (API, streams) | untouched |
 
-Applied only to successful (2xx/3xx) GET/HEAD responses; an upstream policy or `ETag` is never overridden.
+Applied only to successful (2xx/3xx) GET/HEAD responses; hash-addressed assets override an upstream `no-cache` (the hash makes it safe), everything else never overrides an upstream policy or `ETag`.
 
 ## Install
 
@@ -80,7 +80,7 @@ In the profile's `cordis.patch.yml`:
 
 ### Verified end-to-end
 
-The test suite (17 checks) covers the login flow, header rewrites (asserted upstream: `Host` rewritten, `Origin` stripped, gateway cookie withheld), the cache policy (immutable / revalidate / no-store), streaming, the WebSocket tunnel handshake and echo round-trip, and the auth gate on upgrades:
+The test suite (18 checks) covers the login flow, header rewrites (asserted upstream: `Host` rewritten, `Origin` stripped, gateway cookie withheld), the cache policy (immutable / hash-query override / revalidate / no-store), streaming, the WebSocket tunnel handshake and echo round-trip, and the auth gate on upgrades:
 
 ```sh
 pnpm install

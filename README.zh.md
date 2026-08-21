@@ -42,11 +42,11 @@ dsh-gateway 站在这两层前面：
 | 响应 | 策略 |
 | --- | --- |
 | HTML | `no-store` —— 永不缓存，登录态与页面新鲜度始终正确 |
-| hash 命名路径下的静态资源（`/assets/`、`/dist/`、`/static/`、`/vendor/`、`/favicon`） | `public, max-age=31536000, immutable` —— 缓存一年，文件名 hash 保证正确性 |
+| 以内容 hash 寻址的静态资源 —— hash 命名路径（`/assets/`、`/dist/`、`/static/`、`/vendor/`、`/favicon`）或 hash 查询参数（`?rev=<hash>`、`?v=<hash>` 等） | `public, max-age=31536000, immutable` —— 缓存一年；hash 是 URL 的一部分，上游更新即换新 URL、立即生效（此类 URL 上的上游 `no-cache` 会被覆盖） |
 | 其他静态文件（JS/CSS/图片/字体/wasm 等，按 content-type 或扩展名识别） | `public, max-age=300` —— 5 分钟后复验证 |
 | 其余（API、流式） | 不干预 |
 
-仅对成功（2xx/3xx）的 GET/HEAD 生效；上游自带缓存头或 `ETag` 时不覆盖。
+仅对成功（2xx/3xx）的 GET/HEAD 生效；hash 寻址资源会覆盖上游 `no-cache`（有 hash 保证安全），其余情况不覆盖上游策略或 `ETag`。
 
 ## 安装
 
@@ -80,7 +80,7 @@ dsh web
 
 ### 端到端验证
 
-测试套件（17 项）覆盖登录流、头部改写（在上游断言：`Host` 已改写、`Origin` 已剥除、网关 cookie 未下发）、缓存策略（immutable / 复验证 / no-store）、流式转发、WebSocket 隧道握手与回显往返、upgrade 的认证门：
+测试套件（18 项）覆盖登录流、头部改写（在上游断言：`Host` 已改写、`Origin` 已剥除、网关 cookie 未下发）、缓存策略（immutable / hash 查询参数覆盖 / 复验证 / no-store）、流式转发、WebSocket 隧道握手与回显往返、upgrade 的认证门：
 
 ```sh
 pnpm install

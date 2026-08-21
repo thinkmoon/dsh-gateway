@@ -85,6 +85,11 @@ const upstream = http.createServer((req, res) => {
     res.end("console.log(2)");
     return;
   }
+  if (req.method === "GET" && /^\/plugin\/client\.js/.test(req.url ?? "")) {
+    res.writeHead(200, { "content-type": "text/javascript", "cache-control": "no-cache" });
+    res.end("console.log(3)");
+    return;
+  }
   if (req.method === "GET" && req.url === "/page.html") {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     res.end("<html></html>");
@@ -264,6 +269,10 @@ async function main() {
   const plainAsset = await fetch(base + "/asset.js", { headers: { cookie } });
   assert.equal(plainAsset.headers.get("cache-control"), "public, max-age=300");
   ok("other static files get short revalidate window");
+
+  const hashQueried = await fetch(base + "/plugin/client.js?rev=7eb526320903", { headers: { cookie } });
+  assert.equal(hashQueried.headers.get("cache-control"), "public, max-age=31536000, immutable");
+  ok("hash-query (?rev=<hash>) asset overrides upstream no-cache with immutable");
 
   const htmlPage = await fetch(base + "/page.html", { headers: { cookie } });
   assert.equal(htmlPage.headers.get("cache-control"), "no-store");
