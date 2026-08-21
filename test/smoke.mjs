@@ -75,6 +75,21 @@ const upstream = http.createServer((req, res) => {
     }, 30);
     return;
   }
+  if (req.method === "GET" && req.url === "/asset.js") {
+    res.writeHead(200, { "content-type": "application/javascript" });
+    res.end("console.log(1)");
+    return;
+  }
+  if (req.method === "GET" && req.url === "/assets/app.abc123.js") {
+    res.writeHead(200, { "content-type": "application/javascript" });
+    res.end("console.log(2)");
+    return;
+  }
+  if (req.method === "GET" && req.url === "/page.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end("<html></html>");
+    return;
+  }
   if (req.method === "GET" && req.url === "/_last-upgrade") {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify(lastUpgradeHeaders ?? {}));
@@ -241,6 +256,18 @@ async function main() {
   const streamText = await stream.text();
   assert.equal(streamText, "chunk-1\nchunk-2\nchunk-3\n");
   ok("streaming response passes through unbuffered");
+
+  const hashedAsset = await fetch(base + "/assets/app.abc123.js", { headers: { cookie } });
+  assert.equal(hashedAsset.headers.get("cache-control"), "public, max-age=31536000, immutable");
+  ok("hash-path static asset gets immutable cache policy");
+
+  const plainAsset = await fetch(base + "/asset.js", { headers: { cookie } });
+  assert.equal(plainAsset.headers.get("cache-control"), "public, max-age=300");
+  ok("other static files get short revalidate window");
+
+  const htmlPage = await fetch(base + "/page.html", { headers: { cookie } });
+  assert.equal(htmlPage.headers.get("cache-control"), "no-store");
+  ok("HTML responses stay no-store");
 
   const logout = await fetch(base + "/_gw/logout", { method: "POST", headers: { cookie }, redirect: "manual" });
   const clearCookie = logout.headers.getSetCookie()[0];

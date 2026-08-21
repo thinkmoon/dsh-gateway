@@ -136,6 +136,35 @@ function errnoOf(err) {
   return "error";
 }
 
+/** Directories whose filenames carry a content hash and are safe to cache forever. */
+const IMMUTABLE_PATH_PREFIXES = ["/assets/", "/dist/", "/static/", "/vendor/", "/favicon"];
+
+/**
+ * Decide the Cache-Control policy a proxied response should carry.
+ *
+ * The upstream DSH web server sends no cache headers at all, so browsers
+ * re-fetch every JS/CSS asset on each visit. HTML and anything dynamic stays
+ * no-store; hash-named static assets become immutable; other static files get
+ * a short revalidation window. An existing upstream policy is never overridden.
+ *
+ * @param {IncomingMessage} req
+ * @param {string} contentType
+ * @returns {string | undefined}
+ */
+function cacheControlFor(req, contentType) {
+  if (req.method !== "GET" && req.method !== "HEAD") return undefined;
+  if (contentType.includes("text/html")) return "no-store";
+  const ct = contentType.split(";")[0].trim().toLowerCase();
+  const staticLike = /^(?:text\/css|application\/javascript|text\/javascript|image\/|font\/|audio\/|video\/|application\/wasm|application\/manifest\+json)/.test(ct)
+    || ct === "application/json"
+    || /\.(?:css|js|mjs|json|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|eot|map|wasm|webmanifest)$/i.test(req.url ?? "");
+  if (!staticLike) return undefined;
+  if (IMMUTABLE_PATH_PREFIXES.some((prefix) => (req.url ?? "/").startsWith(prefix))) {
+    return "public, max-age=31536000, immutable";
+  }
+  return "public, max-age=300";
+}
+
 /**
  * @param {URL} target
  * @param {object} options
@@ -164,6 +193,10 @@ export function createHttpForwarder(target, { cookieName, onError }) {
         for (const [name, value] of Object.entries(up.headers)) {
           if (HOP_BY_HOP.has(name)) continue;
           outHeaders[name] = value;
+        }
+        if (outHeaders["cache-control"] === undefined && outHeaders.etag === undefined) {
+          const cacheControl = cacheControlFor(req, String(up.headers["content-type"] ?? ""));
+          if (cacheControl !== undefined && (up.statusCode ?? 502) < 400) outHeaders["cache-control"] = cacheControl;
         }
         res.writeHead(up.statusCode ?? 502, outHeaders);
         up.pipe(res);
