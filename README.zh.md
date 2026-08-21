@@ -31,10 +31,22 @@ dsh-gateway 站在这两层前面：
 
 - **插件原生** —— 随 `dsh web` 一起启动/退出，无额外守护进程、无 supervisor。`--port 0` 动态端口自动跟随。
 - **一切流量前有密码门** —— 内置登录页、HMAC-SHA256 签名的 `HttpOnly; SameSite=Lax` 会话 cookie（默认 7 天）、程序化访问用 `Authorization: Bearer <password>`。WebSocket upgrade 同样受会话保护（浏览器自动携带 cookie）。
+- **静态资源缓存** —— 上游 DSH web 不返回任何缓存头，浏览器每次访问都全量重新拉取 JS/CSS，远程会话因此显得很慢。gateway 补上了一套按内容分类的安全 `Cache-Control` 策略（见下表）：二次访问直接走浏览器缓存，近乎瞬时。
 - **零运行时依赖** —— 纯 Node 核心（`node:http`、`node:crypto`、`node:net`、`node:tls`），无需审计第三方代码。
 - **真流式** —— 请求/响应体端到端管道转发，绝不缓冲（DSH 单请求体上限 160 MiB，大附件上传/下载、SSE 原样通过）。
 - **WebSocket 隧道** —— upgrade（`/api/events.mux`、`/api/events.host`）以原始 socket 双向隧道桥接，实时 UI 与本地完全一致。
 - **默认加固** —— 登录按 IP 限速（10 次/10 分钟）、timing-safe 密码比较、`next` 参数 open-redirect 防护、网关会话 cookie 绝不下发上游、密钥文件 0600。
+
+### 缓存策略
+
+| 响应 | 策略 |
+| --- | --- |
+| HTML | `no-store` —— 永不缓存，登录态与页面新鲜度始终正确 |
+| hash 命名路径下的静态资源（`/assets/`、`/dist/`、`/static/`、`/vendor/`、`/favicon`） | `public, max-age=31536000, immutable` —— 缓存一年，文件名 hash 保证正确性 |
+| 其他静态文件（JS/CSS/图片/字体/wasm 等，按 content-type 或扩展名识别） | `public, max-age=300` —— 5 分钟后复验证 |
+| 其余（API、流式） | 不干预 |
+
+仅对成功（2xx/3xx）的 GET/HEAD 生效；上游自带缓存头或 `ETag` 时不覆盖。
 
 ## 安装
 
@@ -68,7 +80,7 @@ dsh web
 
 ### 端到端验证
 
-测试套件（14 项）覆盖登录流、头部改写（在上游断言：`Host` 已改写、`Origin` 已剥除、网关 cookie 未下发）、流式转发、WebSocket 隧道握手与回显往返、upgrade 的认证门：
+测试套件（17 项）覆盖登录流、头部改写（在上游断言：`Host` 已改写、`Origin` 已剥除、网关 cookie 未下发）、缓存策略（immutable / 复验证 / no-store）、流式转发、WebSocket 隧道握手与回显往返、upgrade 的认证门：
 
 ```sh
 pnpm install
@@ -83,6 +95,7 @@ pnpm test
 | 让 DSH 接受远程流量 | 代理而非改绑定：DSH 保持 loopback；`Host` 改写为 `127.0.0.1:<port>`、`Origin` 丢弃，loopback 护栏看到的就是纯本地请求 |
 | 认证 | scrypt 派生密钥签名带过期时间的会话令牌（`<exp>.<hmac>`），存 `HttpOnly` cookie；脚本用 Bearer 密码 |
 | WebSocket | upgrade 在 socket 层隧道：网关向上游重放握手，之后字节双向管道 |
+| 缓存 | 按内容分类注入 `Cache-Control`：hash 路径资源 immutable 一年、其他静态文件 5 分钟复验证、HTML 恒为 no-store；上游缓存头与 `ETag` 原样透传不覆盖 |
 | 生命周期 | 注入 `webServer` 服务的 cordis 插件：监听注册为 effect，fiber 销毁时关闭；端口被占只禁用 gateway，不碰 DSH |
 
 ## 与 dsh-remote-web-ui 的关系

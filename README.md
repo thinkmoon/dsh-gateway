@@ -31,10 +31,22 @@ Every forwarded request gets `Host` rewritten to the local target and `Origin` s
 
 - **Plugin-native** — starts and stops with `dsh web`; no extra daemon, no supervisor, nothing to babysit. Follows dynamic ports (`--port 0`) automatically.
 - **Password gate in front of everything** — built-in login page, HMAC-SHA256-signed `HttpOnly; SameSite=Lax` session cookie (default 7d), `Authorization: Bearer <password>` for programmatic access. WebSocket upgrades are gated by the same session (browsers attach the cookie automatically).
+- **Static asset caching** — the upstream DSH web server sends no cache headers at all, so browsers re-download the entire JS/CSS bundle on every visit, which makes remote sessions feel sluggish. The gateway fills the gap with a safe, content-aware `Cache-Control` policy (see below). Repeat visits load from the browser cache: near-instant.
 - **Zero runtime dependencies** — plain Node core (`node:http`, `node:crypto`, `node:net`, `node:tls`); nothing to audit, nothing to break.
 - **True streaming** — request/response bodies are piped end to end, never buffered (DSH accepts request bodies up to 160 MiB; large uploads/downloads and SSE pass through untouched).
 - **WebSocket tunneling** — upgrades (`/api/events.mux`, `/api/events.host`) are bridged as raw bidirectional socket tunnels, so the live UI works exactly as locally.
 - **Hardened by default** — per-IP login rate limiting (10 attempts / 10 min), timing-safe password comparison, open-redirect guard on `next`, gateway session cookie never forwarded upstream, secrets stored `0600`.
+
+### Cache policy
+
+| Response | Policy |
+| --- | --- |
+| HTML | `no-store` — never cached; login state and UI freshness always correct |
+| Static assets under hash-named paths (`/assets/`, `/dist/`, `/static/`, `/vendor/`, `/favicon`) | `public, max-age=31536000, immutable` — cached for a year; the filename hash guarantees correctness |
+| Other static files (JS/CSS/images/fonts/wasm…, by content-type or extension) | `public, max-age=300` — short window, then revalidate |
+| Everything else (API, streams) | untouched |
+
+Applied only to successful (2xx/3xx) GET/HEAD responses; an upstream policy or `ETag` is never overridden.
 
 ## Install
 
@@ -68,7 +80,7 @@ In the profile's `cordis.patch.yml`:
 
 ### Verified end-to-end
 
-The test suite (14 checks) covers the login flow, header rewrites (asserted upstream: `Host` rewritten, `Origin` stripped, gateway cookie withheld), streaming, the WebSocket tunnel handshake and echo round-trip, and the auth gate on upgrades:
+The test suite (17 checks) covers the login flow, header rewrites (asserted upstream: `Host` rewritten, `Origin` stripped, gateway cookie withheld), the cache policy (immutable / revalidate / no-store), streaming, the WebSocket tunnel handshake and echo round-trip, and the auth gate on upgrades:
 
 ```sh
 pnpm install
@@ -83,6 +95,7 @@ pnpm test
 | Making DSH accept remote traffic | Proxy, not a bind change: DSH stays on loopback; `Host` is rewritten to `127.0.0.1:<port>` and `Origin` is dropped, so the loopback fence sees plain local requests |
 | Auth | scrypt-derived key signs expiring session tokens (`<exp>.<hmac>`), stored in an `HttpOnly` cookie; Bearer password for scripts |
 | WebSockets | Upgrades tunnel at the socket level — the gateway replays the handshake upstream and then pipes bytes both directions |
+| Caching | Content-aware `Cache-Control` injection: hash-path assets immutable for a year, other static files revalidate after 5 min, HTML always no-store; upstream cache headers and `ETag`s pass through untouched |
 | Lifetime | A cordis plugin keyed to the `webServer` service: listener registered as an effect, closed on fiber disposal; a busy port disables the gateway without touching DSH |
 
 ## Relation to dsh-remote-web-ui

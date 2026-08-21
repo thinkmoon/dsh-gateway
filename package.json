@@ -1,6 +1,6 @@
 {
   "name": "dsh-gateway",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DSH plugin: authenticated reverse proxy for the web GUI. Starts with `dsh web` (default 0.0.0.0:8642) and forwards every request (HTTP streams and WebSocket upgrades) to the loopback DSH server with Host rewritten to 127.0.0.1 and Origin stripped, so a remote session behaves exactly like a local one.",
   "type": "module",
   "engines": {
